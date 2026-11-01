@@ -41,6 +41,7 @@ htdcn0N  (profile default,rke2,runai)
 | `runai/24-workload-catalog.sh` | `catalog/environments.yaml` → images under `workloads/`, Run:ai Environments, registry Credentials and the `workload-registry` data source. Then **removes every environment whose image is not in the workload registry** (Run:ai's internet-only built-ins, or ones created in the UI pointing upstream) so the UI only offers what the offline nodes can run; `KEEP_UNUSABLE=1` only reports. |
 | `runai/25-mirror-image.sh <image> [name:tag]` | Pull any image into the workload registry by hand (all architectures, digests kept); prints the image reference and a ready catalog entry. |
 | `runai/26-build-image.sh [name...]` | Build catalog entries that have `build: images/<dir>` (a Dockerfile `FROM ${WL}/<catalog image>`) with podman on ww1, push them to `workloads/` and run `24-workload-catalog.sh` so they show up as Run:ai environments. Existing tags are kept (`FORCE=1` rebuilds). |
+| `runai/htd-images.py [Dockerfile...]` | **Root-only TUI** on ww1 for the workload registry: browse/filter repositories and tags (platforms, size, labels, env, history), see which tags are Run:ai environments (`●`) or catalog-only (`○`), build a Dockerfile (writes its catalog entry, then `26-build-image.sh`), import an image (`25-mirror-image.sh`, or a catalog entry + `24-workload-catalog.sh`), sync, edit the catalog. Dockerfiles given as arguments open the build dialog. Scriptable: `ls`, `inspect`, `build`, `import`, `sync`. Guide: [`../htd-images-howto.md`](../htd-images-howto.md). |
 | `runai/30-smoke-test.sh` | Project `smoke` + a 1-GPU and a 0.5-GPU training through the API; both must reach Running. `KEEP=1` leaves them. |
 | `runai/31-verify-local.sh` | Every image used by any pod resolves in the local registry. ww1 has internet and containerd silently falls back upstream, so run this after installs; re-run `11-mirror.sh` if it reports gaps (its last pass also mirrors images of running pods, e.g. the Prometheus that Run:ai's operator starts). |
 | `runai/32-catalog-test.sh` | As a user, via the API: every OS environment runs, a workload lists the workload registry through the data source, an RStudio workspace URL answers with the Run:ai SSO redirect. `KEEP=1` leaves them. |
@@ -106,6 +107,34 @@ Just copy an image into the local repo (no UI entry):
 `runai/25-mirror-image.sh quay.io/jupyter/minimal-notebook:2026-10-28`.
 After a Run:ai upgrade, re-run `24-workload-catalog.sh`: upgrades may re-seed
 built-ins that point at the internet.
+
+### Image TUI (`htd-images`)
+
+Full admin guide: [`../htd-images-howto.md`](../htd-images-howto.md).
+
+Root on ww1, from the repo copy (it reads the push/pull credentials in
+`/etc/rke2-registry` and the Run:ai admin password, so it is not a user tool):
+
+```sh
+ln -sf ~/rke2_deploy_ww/runai/htd-images.py /usr/local/sbin/htd-images
+htd-images                                        # browse
+htd-images ~/rke2_deploy_ww/runai/images/mlflow/Dockerfile   # build dialog
+htd-images build runai/images/mlflow/Dockerfile -y            # same, no TUI
+htd-images import quay.io/jupyter/minimal-notebook:2026-10-28 --env minimal
+```
+
+A Dockerfile can carry its catalog entry in `#catalog` comment lines (YAML:
+description, `uidGidSource`, `connections`, ...); name defaults to the
+directory (or `foo.Dockerfile` → `foo`), tag to today's date. Builds and
+imports **edit `catalog/environments.yaml` on ww1**: copy it back into git
+(`scp root@192.168.65.2:rke2_deploy_ww/runai/catalog/environments.yaml runai/catalog/`)
+before the next tar-over-ssh overwrites it. Every action's output is
+appended to `/var/log/htd-images.log` (`L` in the TUI).
+
+Example: `images/mlflow` – *HTD Researcher · MLflow*: MLflow tracking server
+as a Run:ai tool (host-based URL), running as the submitting user with runs
+in `~/mlflow`; branded shell (banner, prompt, `htd-info`, `htd-demo`,
+`htd-help`) for login and Run:ai UI terminals.
 
 **Querying the registry from a workload** – select data source
 `workload-registry`; it mounts `url`, `username`, `password`, `ca.crt` at

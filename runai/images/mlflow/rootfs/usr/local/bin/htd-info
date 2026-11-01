@@ -1,0 +1,40 @@
+#!/bin/bash
+# What this workload is and what it got: identity, Run:ai placement,
+# cgroup limits, GPUs, storage, MLflow.
+. /etc/profile.d/htd-00-env.sh
+b=$'\e[1m' c=$'\e[36m' g=$'\e[32m' r=$'\e[31m' d=$'\e[2m' z=$'\e[0m'
+row() { printf "  ${b}%-10s${z} %s\n" "$1" "$2"; }
+
+cpu="unlimited"
+if read -r quota period < /sys/fs/cgroup/cpu.max 2>/dev/null && [ "$quota" != max ]; then
+  cpu=$(awk -v q="$quota" -v p="$period" 'BEGIN{printf "%.2g CPUs", q/p}')
+fi
+mem=$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo max)
+[ "$mem" != max ] && mem=$(numfmt --to=iec "$mem") || mem="unlimited"
+used=$(numfmt --to=iec "$(cat /sys/fs/cgroup/memory.current 2>/dev/null || echo 0)")
+
+if command -v nvidia-smi >/dev/null 2>&1; then
+  gpus=$(nvidia-smi -L 2>/dev/null | sed 's/ (UUID.*//' | paste -sd ';' -)
+else
+  gpus="${NVIDIA_VISIBLE_DEVICES:-none}${RUNAI_NUM_OF_GPUS:+ ($RUNAI_NUM_OF_GPUS GPU)}"
+fi
+if curl -fsS -m 2 "$MLFLOW_TRACKING_URI/health" >/dev/null 2>&1; then
+  mlf="${g}● running${z} $MLFLOW_TRACKING_URI"
+else
+  mlf="${r}○ not running${z} (start: htd-start &)"
+fi
+
+echo
+echo "  ${b}HTD Researcher · $(. /etc/htd-release; echo "$NAME")${z}  ${d}$(. /etc/htd-release; echo "built $BUILT")${z}"
+echo
+row user      "$HTD_USER  ${d}uid=$(id -u) gid=$(id -g) groups=$(id -G | tr ' ' ,)${z}"
+row project   "${c}${HTD_PROJECT:-?}${z}  workload ${c}${HTD_WORKLOAD:-?}${z}  pod $(hostname)"
+row node      "${NODE_NAME:-${d}(not exposed)${z}}  $(uname -m), $(nproc) visible CPUs"
+row limits    "cpu $cpu, memory $mem (using $used)"
+row gpus      "$gpus"
+row home      "$HTD_HOME  ${d}$(df -h "$HTD_HOME" 2>/dev/null | awk 'NR==2{print $4" free of "$2}')${z}"
+row mlflow    "$mlf"
+[ -n "${HTD_MLFLOW_URL:-}" ] && row browser "$HTD_MLFLOW_URL"
+row data      "$HTD_MLFLOW_DIR"
+[ -d /etc/workload-registry ] && row registry "$(cat /etc/workload-registry/url) ${d}(data source workload-registry)${z}"
+echo

@@ -1,0 +1,26 @@
+#!/bin/bash
+# Container command: MLflow tracking server on :${MLFLOW_PORT}, data in the
+# user's home (~/mlflow) unless MLFLOW_BACKEND_STORE_URI /
+# MLFLOW_ARTIFACTS_DESTINATION say otherwise. Extra arguments go to
+# `mlflow server`. Output also lands in /tmp/htd-mlflow.log (mlflow-logs).
+set -euo pipefail
+. /etc/profile.d/htd-00-env.sh
+
+mkdir -p "$HTD_MLFLOW_DIR/artifacts"
+args=(--host 0.0.0.0 --port "${MLFLOW_PORT:-5000}"
+      --backend-store-uri "${MLFLOW_BACKEND_STORE_URI:-sqlite:///$HTD_MLFLOW_DIR/mlflow.db}"
+      --artifacts-destination "${MLFLOW_ARTIFACTS_DESTINATION:-$HTD_MLFLOW_DIR/artifacts}")
+# MLflow >= 3.5 checks the Host header; Run:ai serves the UI on
+# <project>-<workload>.<domain>, so accept any host (Run:ai SSO is in front).
+if mlflow server --help 2>/dev/null | grep -q -- --allowed-hosts; then
+  args+=(--allowed-hosts "${MLFLOW_ALLOWED_HOSTS:-*}")
+fi
+
+cat <<EOF
+ ▲ HTD Researcher · MLflow $(mlflow --version 2>/dev/null | awk '{print $NF}')
+   user     $HTD_USER (uid $(id -u))   project ${HTD_PROJECT:-local}
+   store    ${MLFLOW_BACKEND_STORE_URI:-sqlite:///$HTD_MLFLOW_DIR/mlflow.db}
+   browser  ${HTD_MLFLOW_URL:-open the MLflow tool of this workload in Run:ai}
+EOF
+exec > >(tee -a /tmp/htd-mlflow.log) 2>&1
+exec mlflow server "${args[@]}" "$@"

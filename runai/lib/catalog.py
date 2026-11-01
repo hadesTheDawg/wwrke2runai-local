@@ -7,8 +7,8 @@
   catalog.py <file> builds                     -> "<name>\t<build dir>\t<image>"
 
 Entries have either `source` (copied from upstream by 24-workload-catalog.sh)
-or `build` (a directory with a Dockerfile, relative to the catalog file's
-parent; built on ww1 by 26-build-image.sh).
+or `build` (a directory with a Dockerfile, or a Dockerfile path; relative to
+the catalog file's parent or absolute; built on ww1 by 26-build-image.sh).
 
 Entries with keepSpec: true re-point an existing environment (e.g. one of
 Run:ai's built-ins) at the local image and keep the rest of its spec; their

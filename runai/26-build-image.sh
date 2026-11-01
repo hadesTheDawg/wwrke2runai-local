@@ -8,7 +8,8 @@
 #
 #   - name: ubuntu-dev
 #     description: Ubuntu 24.04 + compilers, git, Python venv
-#     build: images/ubuntu-dev          # relative to runai/
+#     build: images/ubuntu-dev          # relative to runai/, or absolute;
+#                                       # a directory or a Dockerfile path
 #     image: ubuntu-dev:2026-11-01      # pin: an existing tag is never rebuilt
 #     uidGidSource: fromIdpToken
 #
@@ -51,10 +52,12 @@ fi
 built=0
 for b in "${BUILDS[@]}"; do
   IFS=$'\t' read -r name dir image <<<"$b"
-  ctx="$RUNAI_SRC/$dir"
+  case "$dir" in /*) ctx=$dir ;; *) ctx="$RUNAI_SRC/$dir" ;; esac
+  file=()     # build: names a Dockerfile -> its directory is the context
+  if [ -f "$ctx" ]; then file=(-f "$ctx"); ctx=$(dirname "$ctx"); fi
   RW="$REGISTRY/$WL_REG_PREFIX/$image"
   REF="$WL_REGISTRY/$WL_REG_PREFIX/$image"
-  [ -f "$ctx/Dockerfile" ] || [ -f "$ctx/Containerfile" ] || { echo "$name: no Dockerfile in $ctx" >&2; exit 1; }
+  [ ${#file[@]} -gt 0 ] || [ -f "$ctx/Dockerfile" ] || [ -f "$ctx/Containerfile" ] || { echo "$name: no Dockerfile in $ctx" >&2; exit 1; }
 
   if [ -z "${FORCE:-}" ] && skopeo inspect --raw --creds "$PUSH" "docker://$RW" >/dev/null 2>&1; then
     echo "  have   $image  (FORCE=1 rebuilds)"
@@ -69,7 +72,7 @@ for b in "${BUILDS[@]}"; do
     --build-arg "WL=$WL_REGISTRY/$WL_REG_PREFIX" \
     --label "org.opencontainers.image.title=$name" \
     --label "org.opencontainers.image.created=$(date -u +%FT%TZ)" \
-    -t "$RW" "$ctx"
+    "${file[@]}" -t "$RW" "$ctx"
   podman push --cert-dir "$CERTS" --creds "$PUSH" "$RW"
   # drop what this build added locally (the image, its bases, dangling layers)
   podman rmi -f "$RW" >/dev/null

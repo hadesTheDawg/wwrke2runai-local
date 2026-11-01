@@ -75,6 +75,9 @@ The Run:ai layer (control plane, cluster, simulated or real GPUs, local
 disks on the nodes) builds on this one: see [`runai/README.md`](runai/README.md).
 Users: [`cli-howto.md`](cli-howto.md) explains writing and submitting
 workload YAML from the command line (GPUs, CPUs, home, projects, networking).
+Admins: [`htd-images-howto.md`](htd-images-howto.md) covers the root-only
+image TUI on ww1 (browse the workload registry, build/import images, offer
+them as Run:ai environments).
 
 ## Local deployment kit
 

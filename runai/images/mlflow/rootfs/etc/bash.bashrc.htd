@@ -1,0 +1,10 @@
+
+# --- HTD Researcher (appended at build) ------------------------------------
+# Run:ai UI terminals and `kubectl exec ... bash` start non-login shells,
+# which skip /etc/profile.d; load the HTD environment, prompt and banner here.
+if [ -z "${HTD_PROFILE_LOADED:-}" ]; then
+  HTD_PROFILE_LOADED=1
+  for f in /etc/profile.d/htd-*.sh; do [ -r "$f" ] && . "$f"; done
+  unset f
+  [ "$PWD" = /tmp ] && cd "$HOME"     # image WORKDIR -> the user's home
+fi

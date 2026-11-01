@@ -1,0 +1,64 @@
+#!/opt/mlflow/bin/python
+"""htd-demo: a small MLflow tour. Trains random forests on scikit-learn's
+diabetes data with a few settings, logs params/metrics/a plot/the model to
+experiment "htd-demo" and registers the best one as "htd-diabetes-rf".
+
+Uses the tracking server of this workload; without one (e.g. a training with
+another command) it writes straight to ~/mlflow/mlflow.db instead.
+"""
+import os
+import urllib.request
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+import mlflow  # noqa: E402
+import mlflow.sklearn  # noqa: E402
+from sklearn.datasets import load_diabetes  # noqa: E402
+from sklearn.ensemble import RandomForestRegressor  # noqa: E402
+from sklearn.metrics import mean_squared_error, r2_score  # noqa: E402
+from sklearn.model_selection import train_test_split  # noqa: E402
+
+uri = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
+try:
+    urllib.request.urlopen(f"{uri}/health", timeout=2)
+except Exception:
+    store = os.path.join(os.environ.get("HTD_MLFLOW_DIR", os.path.expanduser("~/mlflow")), "mlflow.db")
+    os.makedirs(os.path.dirname(store), exist_ok=True)
+    uri = f"sqlite:///{store}"
+    print(f"no tracking server, logging to {uri}")
+mlflow.set_tracking_uri(uri)
+mlflow.set_experiment("htd-demo")
+
+X, y = load_diabetes(return_X_y=True, as_frame=True)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+
+best = None
+for n_estimators, max_depth in [(50, 3), (100, 6), (300, None)]:
+    name = f"rf-{n_estimators}-{max_depth or 'full'}"
+    with mlflow.start_run(run_name=name) as run:
+        mlflow.set_tags({"team": "HTD", "owner": os.environ.get("HTD_USER", "?"),
+                         "project": os.environ.get("HTD_PROJECT", "local")})
+        model = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth, random_state=42)
+        model.fit(X_train, y_train)
+        pred = model.predict(X_test)
+        rmse = mean_squared_error(y_test, pred) ** 0.5
+        r2 = r2_score(y_test, pred)
+        mlflow.log_params({"n_estimators": n_estimators, "max_depth": max_depth})
+        mlflow.log_metrics({"rmse": rmse, "r2": r2})
+
+        fig, ax = plt.subplots(figsize=(5, 5))
+        ax.scatter(y_test, pred, s=12, color="#ff8700")
+        ax.plot([y.min(), y.max()], [y.min(), y.max()], "--", color="grey")
+        ax.set(xlabel="actual", ylabel="predicted", title=f"HTD · {name}  (R² {r2:.2f})")
+        mlflow.log_figure(fig, "predicted-vs-actual.png")
+        plt.close(fig)
+
+        info = mlflow.sklearn.log_model(model, name="model", input_example=X_test.head(3))
+        print(f"  {name:<14} rmse {rmse:6.2f}   r2 {r2:5.3f}   run {run.info.run_id[:8]}")
+        if best is None or rmse < best[0]:
+            best = (rmse, info.model_uri, name)
+
+version = mlflow.register_model(best[1], "htd-diabetes-rf")
+print(f"\nbest: {best[2]} -> registered htd-diabetes-rf v{version.version}")
+print(f"open MLflow: {os.environ.get('HTD_MLFLOW_URL') or uri}  (experiment htd-demo)")
