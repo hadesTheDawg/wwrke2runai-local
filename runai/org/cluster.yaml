@@ -1,0 +1,155 @@
+# Site definition in Slurm terms, applied to Run:ai + Linux by
+#   40-partitions.sh   partitions -> Warewulf node tags, node labels,
+#                      (simulated) GPU types, Run:ai node pools
+#   41-accounts.sh     accounts   -> Run:ai departments/projects + quotas,
+#                      Unix groups/users (homes on NFS /home), Run:ai
+#                      users with passwords, UID/GID claims, access rules
+#
+# Slurm                         -> here / Run:ai
+#   PartitionName=... Nodes=...  partitions.<name>.nodes  -> node pool (label runai/node-pool=<name>)
+#   sacctmgr account (parent)    departments.<name>       -> department
+#   sacctmgr account (leaf)      groups.<name>            -> project + Unix group (gid)
+#   GrpTRES=gres/gpu:N           gpus.<partition>: N      -> deserved (guaranteed) GPUs
+#   MaxTRES / GrpTRES ceiling    limit.<partition>: N     -> GPU limit (max incl. over-quota)
+#   Fairshare                    weight                   -> over-quota weight
+#   account coordinator          pi                       -> Project administrator
+#   sacctmgr user/association    users (login: Full Name) -> AI practitioner (via group)
+#
+# Totals must fit the partitions: a100 = 4 GPUs (2 nodes x 2), h100 = 2 GPUs.
+
+partitions:
+  a100:
+    nodes: [htdcn01, htdcn02]
+    gpu: {product: NVIDIA-A100-SXM4-40GB, count: 2, memoryMiB: 40960}
+  h100:
+    nodes: [htdcn03]
+    gpu: {product: NVIDIA-H100-80GB-HBM3, count: 2, memoryMiB: 81920}
+
+# Slurm "Default=YES": where workloads go when the user picks no node pool
+# (Run:ai defaultNodePools, inherited department -> project; a department or
+# group may set its own `default_partitions`). Keeps research workloads off
+# the management node (Run:ai pool "default" = ww1).
+default_partitions: [a100, h100]
+
+uid_base: 5000        # group k: gid = uid_base + 100*k, members uid = gid + 1..99
+email_domain: htd.local
+
+departments:
+  physics:
+    gpus: {a100: 1.0, h100: 0.5}
+    groups:
+      phys-astro:
+        gid: 5100
+        gpus: {a100: 0.5, h100: 0.5}
+        limit: {a100: 2, h100: 2}
+        weight: 2
+        pi: mchandra
+        users:
+          mchandra: Maya Chandra
+          lperez: Luis Perez
+          tokafor: Tobi Okafor
+          jlindqvist: Johan Lindqvist
+          hnakamura: Hana Nakamura
+          ebrennan: Eileen Brennan
+          sriviera: Sofia Riviera
+      phys-hep:
+        gid: 5200
+        gpus: {a100: 0.5}
+        limit: {a100: 2, h100: 1}
+        weight: 1
+        pi: dkowalski
+        users:
+          dkowalski: Daniel Kowalski
+          amensah: Ama Mensah
+          rgupta: Rohan Gupta
+          cfontaine: Claire Fontaine
+          nvolkov: Nikolai Volkov
+          pmurphy: Patrick Murphy
+  chemistry:
+    gpus: {a100: 1.0}
+    groups:
+      chem-comp:
+        gid: 5300
+        gpus: {a100: 0.75}
+        limit: {a100: 3, h100: 1}
+        weight: 2
+        pi: ysato
+        users:
+          ysato: Yuki Sato
+          bharrington: Beth Harrington
+          kadeyemi: Kunle Adeyemi
+          mrossi: Marco Rossi
+          fbeaumont: Fleur Beaumont
+          tlindgren: Tove Lindgren
+      chem-materials:
+        gid: 5400
+        gpus: {a100: 0.25}
+        limit: {a100: 1}
+        weight: 1
+        pi: wzhang
+        users:
+          wzhang: Wei Zhang
+          odiallo: Oumar Diallo
+          ehartmann: Eva Hartmann
+          jcastillo: Javier Castillo
+          snair: Sanjana Nair
+          gpetrov: Georgi Petrov
+  biology:
+    gpus: {a100: 1.0, h100: 0.5}
+    groups:
+      bio-genomics:
+        gid: 5500
+        gpus: {a100: 1.0}
+        limit: {a100: 2}
+        weight: 2
+        pi: aokonkwo
+        users:
+          aokonkwo: Adaeze Okonkwo
+          rbianchi: Riccardo Bianchi
+          lmorales: Lucia Morales
+          dfischer: Dirk Fischer
+          ktanaka: Kenji Tanaka
+          vsingh: Vikram Singh
+          mobrien: Maeve OBrien
+      bio-imaging:
+        gid: 5600
+        gpus: {h100: 0.5}
+        limit: {a100: 1, h100: 2}
+        weight: 1
+        pi: cdubois
+        users:
+          cdubois: Camille Dubois
+          hkim: Hyun Kim
+          ijohansson: Ingrid Johansson
+          uchowdhury: Uma Chowdhury
+          zabebe: Zewdu Abebe
+          fmoretti: Francesca Moretti
+  cs:
+    gpus: {a100: 1.0, h100: 1.0}
+    groups:
+      cs-ml:
+        gid: 5700
+        gpus: {a100: 0.5, h100: 1.0}
+        limit: {a100: 4, h100: 2}
+        weight: 3
+        pi: rvasquez
+        users:
+          rvasquez: Rosa Vasquez
+          skumar: Sunil Kumar
+          jwestbrook: James Westbrook
+          alarsen: Anna Larsen
+          mhoffmann: Max Hoffmann
+          nabdullah: Nadia Abdullah
+      cs-systems:
+        gid: 5800
+        gpus: {a100: 0.5}
+        limit: {a100: 2}
+        weight: 1
+        pi: pnovak
+        users:
+          pnovak: Petr Novak
+          ecarter: Emily Carter
+          toyelaran: Tunde Oyelaran
+          glombardi: Giulia Lombardi
+          kwisniewski: Kasia Wisniewski
+          bmcallister: Brian McAllister

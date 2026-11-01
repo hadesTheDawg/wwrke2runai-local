@@ -1,0 +1,25 @@
+# Simulated GPUs (GPU_MODE=fake): Run:ai's own fake-gpu-operator. Nodes
+# labelled run.ai/simulated-gpu-node-pool=<pool> advertise nvidia.com/gpu and
+# export DCGM-style metrics, so Run:ai scheduling, quotas, fractions and
+# dashboards behave as on real hardware. The label comes from the Warewulf
+# tag runai_fake_gpu_pool (runai overlay).
+topology:
+  nodePoolLabelKey: run.ai/simulated-gpu-node-pool
+  nodePools:
+    default:
+      gpuProduct: NVIDIA-A100-SXM4-40GB
+      gpuCount: 2
+      gpuMemory: 40960
+
+# RKE2 already ships RuntimeClass "nvidia" (rke2-runtimeclasses addon); the
+# chart's own copy would collide with it. Workloads do not need it here.
+runtimeClass:
+  enabled: false
+
+# No KWOK (virtual) nodes in this cluster.
+kwokGpuDevicePlugin:
+  enabled: false
+statusExporter:
+  kwok:
+    prometheusRule:
+      enabled: false

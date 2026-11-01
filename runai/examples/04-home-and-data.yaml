@@ -1,0 +1,61 @@
+# Run as yourself, with your NFS home and other storage mounted.
+#
+# Replace 5102/5100 with your own UID/GID: `id -u` / `id -g` on the login
+# node. With runAsUser >= 5000 the cluster mounts /home (NFS) automatically;
+# the explicit "home" volume below does the same and makes it visible.
+#   runai workload submit -f 04-home-and-data.yaml -p <project>
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: home-and-data
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 5102               # CHANGE ME: id -u
+        runAsGroup: 5100              # CHANGE ME: id -g (your group)
+        supplementalGroups: [5100]
+      containers:
+        - name: main
+          image: 10.10.172.1:5001/workloads/ubuntu:24.04
+          workingDir: /home/lperez    # CHANGE ME
+          env:
+            - {name: HOME, value: /home/lperez}           # CHANGE ME
+            - {name: TMPDIR, value: /scratch}
+          command: ["bash", "-c"]
+          args:
+            - |
+              set -e
+              id
+              echo "written by $(hostname) at $(date)" > "$HOME/runai-home-test.txt"
+              ls -l "$HOME/runai-home-test.txt"
+              ls /opt | head -5
+              dd if=/dev/zero of=/scratch/blob bs=1M count=100 status=none && df -h /scratch /dev/shm /shared | sed 1d
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits:   {cpu: "1", memory: 2Gi}
+          volumeMounts:
+            - {name: home,    mountPath: /home}
+            - {name: opt,     mountPath: /opt, readOnly: true}
+            - {name: scratch, mountPath: /scratch}
+            - {name: dshm,    mountPath: /dev/shm}
+            - {name: shared,  mountPath: /shared}
+      volumes:
+        - name: home                  # NFS /home, already mounted on every node
+          hostPath: {path: /home, type: Directory}
+        - name: opt                   # any NFS export, mounted straight from the server
+          nfs: {server: 10.10.172.1, path: /opt, readOnly: true}
+        - name: scratch               # node-local disk, deleted with the pod
+          emptyDir: {sizeLimit: 10Gi}
+        - name: dshm                  # bigger /dev/shm (PyTorch DataLoader workers)
+          emptyDir: {medium: Memory, sizeLimit: 1Gi}
+        - name: shared                # NFS volume created for this pod, deleted with it
+          ephemeral:
+            volumeClaimTemplate:
+              spec:
+                accessModes: [ReadWriteMany]
+                storageClassName: runai-nfs
+                resources: {requests: {storage: 5Gi}}

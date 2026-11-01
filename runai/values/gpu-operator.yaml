@@ -1,0 +1,19 @@
+# Real GPUs (GPU_MODE=nvidia): NVIDIA GPU Operator on RKE2.
+#
+# Warewulf nodes are stateless, so the driver belongs in the node image
+# (`wwctl image exec ... dnf install nvidia-driver ...`) rather than being
+# compiled by a driver container at every boot. Set driver.enabled=true only
+# if you want the operator-managed driver container instead.
+driver:
+  enabled: false
+
+# RKE2 runs its own containerd; the toolkit must use RKE2's socket. RKE2
+# detects nvidia-container-runtime and adds the "nvidia" runtime handler.
+toolkit:
+  env:
+    - name: CONTAINERD_SOCKET
+      value: /run/k3s/containerd/containerd.sock
+
+# Run:ai GPU fractions do not work with the NRI plugin enabled.
+cdi:
+  nriPluginEnabled: false

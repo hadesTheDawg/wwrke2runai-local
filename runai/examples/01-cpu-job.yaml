@@ -1,0 +1,29 @@
+# Simplest batch workload: a Kubernetes Job, CPU and memory only.
+#   runai workload submit -f 01-cpu-job.yaml -p <project>
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hello-cpu
+spec:
+  backoffLimit: 0                   # do not retry a failed run
+  ttlSecondsAfterFinished: 3600     # remove the finished Job after 1 h
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: main
+          image: 10.10.172.1:5001/workloads/ubuntu:24.04
+          command: ["bash", "-c"]
+          args:
+            - |
+              echo "node:   $(cat /etc/hostname) on $NODE_NAME"
+              echo "cpus:   $(nproc)"
+              echo "memory: $(( $(cat /sys/fs/cgroup/memory.max) / 1048576 )) MiB"
+              id
+              sleep 20
+          env:
+            - name: NODE_NAME
+              valueFrom: {fieldRef: {fieldPath: spec.nodeName}}
+          resources:
+            requests: {cpu: "1", memory: 1Gi}
+            limits:   {cpu: "1", memory: 1Gi}

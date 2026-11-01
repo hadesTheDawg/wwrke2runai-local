@@ -69,6 +69,28 @@ Rotating them = change the file on ww1 and `wwctl overlay build`.
   HTTP on the provisioning network; a `rke2 token create` token can only join
   agents, not servers. Revoke with `rke2 token delete <id>`.
 
+## NVIDIA Run:ai
+
+The Run:ai layer (control plane, cluster, simulated or real GPUs, local
+disks on the nodes) builds on this one: see [`runai/README.md`](runai/README.md).
+Users: [`cli-howto.md`](cli-howto.md) explains writing and submitting
+workload YAML from the command line (GPUs, CPUs, home, projects, networking).
+
+## Local deployment kit
+
+`make` + `.env` on a workstation: copy the whole stack (every image,
+chart, the Run:ai lock, RKE2 RPMs, these overlays) from ww1 into a local,
+verifiable artifact repository, optionally as one signed/encrypted bundle,
+and deploy it into an existing RKE2 GPU cluster, with Weka/CephFS CSI
+project volumes as an option. Schedulable from `.env`. See
+[`local/README.md`](local/README.md) and [`local/STORAGE.md`](local/STORAGE.md).
+
+```sh
+make env && $EDITOR .env
+make fetch            # ww1 -> RUNAI_REPO
+make deploy           # RUNAI_REPO -> KUBECONFIG's cluster
+```
+
 ## Upgrading RKE2
 
 Upgrade the server, then re-run `03-mirror-images.sh` and `04-image.sh`

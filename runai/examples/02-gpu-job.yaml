@@ -1,0 +1,31 @@
+# Whole GPUs: request nvidia.com/gpu as a limit, like any Kubernetes resource.
+# Pick the GPU type with the runai/node-pool label (one node pool).
+#   runai workload submit -f 02-gpu-job.yaml -p <project>
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gpu-job
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        runai/node-pool: h100           # a100 | h100 (omit: any pool of the project)
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: main
+          image: 10.10.172.1:5001/workloads/ubuntu:24.04
+          command: ["bash", "-c"]
+          args:
+            - |
+              echo "node: $NODE_NAME  NVIDIA_VISIBLE_DEVICES=$NVIDIA_VISIBLE_DEVICES"
+              nvidia-smi                      # injected by the NVIDIA runtime
+              sleep 30
+          env:
+            - name: NODE_NAME
+              valueFrom: {fieldRef: {fieldPath: spec.nodeName}}
+          resources:
+            requests: {cpu: "1", memory: 2Gi}
+            limits:   {cpu: "1", memory: 2Gi, nvidia.com/gpu: 1}

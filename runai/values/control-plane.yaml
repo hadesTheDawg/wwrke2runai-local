@@ -1,0 +1,22 @@
+# Run:ai control plane (chart control-plane, release runai-backend).
+# Production-shaped. 22-control-plane.sh adds global.domain and the admin
+# user from env.sh; lab sizing is layered on top from control-plane-lab.yaml.
+global:
+  ingress:
+    # RKE2's Traefik. NVIDIA recommends haproxy, nginx is also supported;
+    # the chart renders one catch-all Ingress, so any class works.
+    ingressClass: traefik
+    tlsSecretName: runai-backend-tls          # created by 22-control-plane.sh
+    extraAnnotations:
+      # http://<domain> -> https://<domain> (Middleware from 22-control-plane.sh)
+      traefik.ingress.kubernetes.io/router.middlewares: runai-backend-https-redirect@kubernetescrd
+  # The certificate is signed by the site CA (/etc/rke2-registry/ca.crt);
+  # services that call back into the domain need to trust it.
+  customCA:
+    enabled: true                             # secret runai-ca-cert
+
+tenantsManager:
+  config:
+    # Admin password from secret runai-admin (key ADMIN_PASSWORD), generated
+    # into /etc/runai/admin-password; never on the helm command line.
+    existingSecret: runai-admin

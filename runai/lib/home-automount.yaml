@@ -1,0 +1,68 @@
+# Mount the NFS /home into every pod Run:ai creates for a workload, without
+# the user having to attach the "home" data source. In-process admission
+# (MutatingAdmissionPolicy, K8s >= 1.34): no webhook, no TLS, no image.
+# Applies to project namespaces (label runai/queue), and only to pods that run
+# as a site user (runAsUser >= 5000, the UID range of org/cluster.yaml; i.e.
+# environments with uidGidSource: fromIdpToken). Image-user environments
+# (Jupyter's jovyan, code-server's coder, RStudio, root) keep the image's own
+# /home: mounting NFS over it hides /home/<image user> and the container
+# cannot start ("mkdir /home/jovyan: permission denied").
+# Opt out per workload with annotation home.htd.local/skip: "true". A
+# container that already mounts /home, or a pod that already has a volume
+# named "home", is left untouched.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: runai-home-automount
+spec:
+  failurePolicy: Fail
+  reinvocationPolicy: Never
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+      - {key: runai/queue, operator: Exists}
+    resourceRules:
+    - {apiGroups: [""], apiVersions: ["v1"], resources: ["pods"], operations: ["CREATE"]}
+  matchConditions:
+  - name: not-skipped
+    expression: '!has(object.metadata.annotations) || !("home.htd.local/skip" in object.metadata.annotations) || object.metadata.annotations["home.htd.local/skip"] != "true"'
+  - name: runs-as-site-user
+    expression: >-
+      (has(object.spec.securityContext) && has(object.spec.securityContext.runAsUser)
+        && object.spec.securityContext.runAsUser >= 5000)
+      || object.spec.containers.exists(c, has(c.securityContext) && has(c.securityContext.runAsUser)
+        && c.securityContext.runAsUser >= 5000)
+  mutations:
+  - patchType: ApplyConfiguration
+    applyConfiguration:
+      expression: |
+        Object{
+          spec: Object.spec{
+            volumes: (
+              (has(object.spec.volumes) && object.spec.volumes.exists(v, v.name == "home"))
+              || !object.spec.containers.exists(c, !has(c.volumeMounts) || !c.volumeMounts.exists(m, m.mountPath == "/home"))
+              ? []
+              : [Object.spec.volumes{
+                  name: "home",
+                  hostPath: Object.spec.volumes.hostPath{path: "/home", type: "Directory"}}]
+            ),
+            containers: object.spec.containers
+              .filter(c, !has(c.volumeMounts) || !c.volumeMounts.exists(m, m.mountPath == "/home"))
+              .map(c, Object.spec.containers{
+                name: c.name,
+                volumeMounts: [Object.spec.containers.volumeMounts{name: "home", mountPath: "/home"}]})
+          }
+        }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: runai-home-automount
+spec:
+  policyName: runai-home-automount
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+      - {key: runai/queue, operator: Exists}
+    resourceRules:
+    - {apiGroups: [""], apiVersions: ["v1"], resources: ["pods"], operations: ["CREATE"]}

@@ -1,0 +1,5 @@
+# Prometheus is a hard prerequisite of the Run:ai cluster: it needs the
+# Prometheus Operator CRDs and creates its own Prometheus CR in "runai".
+# Same shape as NVIDIA's documented install (grafana off).
+grafana:
+  enabled: false

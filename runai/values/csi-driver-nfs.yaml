@@ -1,0 +1,20 @@
+# NFS CSI driver -> default StorageClass for the Run:ai control plane
+# (PostgreSQL, Thanos, NATS) and for Run:ai data sources. Backed by an export
+# on ww1 so state survives the stateless compute nodes. server/share are set
+# by 13-storage.sh from env.sh. In production, point this at your NAS or
+# replace it with your storage vendor's CSI driver and StorageClass.
+storageClass:
+  create: true
+  name: runai-nfs
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+  parameters:
+    server: ""
+    share: ""
+    # Released volumes are moved to archived-<name> instead of being deleted.
+    onDelete: archive
+  reclaimPolicy: Delete
+  volumeBindingMode: Immediate
+  mountOptions:
+    - nfsvers=4.1
+    - hard

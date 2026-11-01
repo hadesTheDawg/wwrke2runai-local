@@ -1,0 +1,23 @@
+# Weka CSI (chart csi-wekafsplugin, https://weka.github.io/csi-wekafs).
+# Site-independent settings only; the API endpoints and the account are in
+# the Secret csi-wekafs-api-secret that 15-storage.sh creates from .env.
+# Check keys against `helm show values` of the chart version you bundle.
+csiDriverName: csi.weka.io
+
+# Stateless (Warewulf) nodes run SELinux permissive; set "mixed" or
+# "enforced" if the node image enforces SELinux.
+selinuxSupport: "off"
+
+pluginConfig:
+  # Keep TLS verification on; the API CA goes into the Secret (WEKA_API_CA_FILE).
+  allowInsecureHttps: false
+  # Nodes without a Weka client can mount through Weka's NFS protocol
+  # gateway instead (chart >= 2.5). Leave off when every GPU node runs the
+  # client (the fast path, and the only one with GPUDirect Storage).
+  # mountProtocol:
+  #   useNfs: false
+  #   allowNfsFailback: false
+  #   interfaceGroupName: ""
+
+# Node plugin only where Weka is mounted (all GPU nodes by default).
+# nodeSelector: {weka.io/client: "true"}

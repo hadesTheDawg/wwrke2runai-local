@@ -1,0 +1,22 @@
+#!/bin/sh
+# Load block-device drivers before the stock "sfdisk" overlay (10-sfdisk.sh)
+# partitions the local disk. wwinit runs before systemd/udev, so modular
+# drivers (virtio_blk, nvme, ahci + sd_mod on EL9) are not loaded yet and
+# the disk does not exist when sfdisk runs.
+#
+# Tag runai_disk_modules (space separated) overrides the module list.
+
+PATH=$PATH:/sbin:/usr/sbin:/bin:/usr/bin
+LOG=/var/log/warewulf-runai-wwinit.log
+mkdir -p /var/log; : > "$LOG"
+info() { printf '%s\n' "$*"; printf '%s\n' "$*" >> "$LOG"; }
+
+for m in {{ default "virtio_blk nvme ahci sd_mod" .Tags.runai_disk_modules }}; do
+    modprobe -q "$m" 2>/dev/null && info "warewulf: runai: loaded $m"
+done
+{{- range $disk := .ThisNode.DiskList }}
+
+for _ in $(seq 1 30); do [ -b "{{ $disk.Id }}" ] && break; sleep 0.5; done
+[ -b "{{ $disk.Id }}" ] && info "warewulf: runai: {{ $disk.Id }} present" \
+    || info "warewulf: runai: WARNING {{ $disk.Id }} not found, local disk will not be set up"
+{{- end }}

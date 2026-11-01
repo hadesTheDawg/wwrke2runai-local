@@ -1,0 +1,68 @@
+# Run:ai project volumes (19-project-volumes.sh, `make project-volumes`).
+#
+# Each volume becomes, per project:
+#   - a PVC in the project's namespace (runai-<project>)
+#   - a project-scoped Run:ai "PVC" data source with the same name, mounted
+#     at mountPath in every workload that selects it (UI: Data sources;
+#     CLI: runai workload submit ... --existing-pvc claimname=<name>,path=<mountPath>)
+#
+# Two kinds:
+#   storageClass: <class>   new volume, dynamically provisioned (a Weka
+#                           directory with a hard quota / a CephFS subvolume)
+#   existing: {...}         static PV bound to data that already exists on
+#                           Weka or CephFS (datasets, group directories)
+#
+# `projects: [a, b]` instead of `project: a` gives each listed project its
+# own PVC; for a *new* volume that means separate storage per project, for
+# an *existing* path they all see the same directory.
+#
+# Projects must exist (runai/41-accounts.sh or the UI). Permissions are the
+# file system's: run workloads as the user (uidGidSource: fromIdpToken) and
+# make group directories group-owned by the project's Unix GID.
+
+# Settings for static ("existing") volumes; must match 15-storage.sh / .env
+drivers:
+  weka:
+    driver: csi.weka.io
+    secret: csi-wekafs-api-secret
+    secretNamespace: csi-wekafs
+    filesystem: default
+  cephfs:
+    driver: cephfs.csi.ceph.com
+    secret: csi-cephfs-secret
+    secretNamespace: ceph-csi-cephfs
+    clusterID: 00000000-0000-0000-0000-000000000000   # CEPH_CLUSTER_ID (fsid)
+    fsName: cephfs
+
+volumes: []
+# --- examples ---------------------------------------------------------------------
+#  # 2 TiB working area for one project on Weka (directory quota, survives
+#  # workload and project deletion with WEKA_RECLAIM_POLICY=Retain)
+#  - name: work
+#    project: theory
+#    storageClass: weka-projects
+#    size: 2Ti
+#    accessMode: ReadWriteMany
+#    mountPath: /work
+#
+#  # The same on CephFS, one subvolume per project
+#  - name: scratch
+#    projects: [theory, cosmology]
+#    storageClass: cephfs-projects
+#    size: 500Gi
+#    mountPath: /scratch
+#
+#  # An existing, read-only dataset directory on Weka, shared by two projects
+#  - name: imagenet
+#    projects: [theory, vision]
+#    existing: {driver: weka, filesystem: datasets, path: /imagenet}
+#    size: 10Ti
+#    readOnly: true
+#    mountPath: /datasets/imagenet
+#
+#  # A group's existing directory on CephFS (kernel client)
+#  - name: group-share
+#    project: cosmology
+#    existing: {driver: cephfs, path: /volumes/groups/cosmology}
+#    size: 5Ti
+#    mountPath: /group

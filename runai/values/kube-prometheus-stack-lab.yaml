@@ -1,0 +1,9 @@
+# Lab sizing: nothing in the lab consumes alerts, and Run:ai scrapes into
+# its own Prometheus in "runai"; keep the stack's instance small.
+alertmanager:
+  enabled: false
+prometheus:
+  prometheusSpec:
+    retention: 2d
+    resources:
+      requests: {cpu: 50m, memory: 256Mi}

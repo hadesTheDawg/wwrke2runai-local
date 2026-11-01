@@ -1,0 +1,48 @@
+# Lab sizing for three 4-CPU / 16 GB nodes. Chart defaults request ~10.3
+# CPU and 13 GiB for the control plane alone (NVIDIA sizes it for 10 dedicated
+# cores). Only *requests* are lowered, limits keep the chart defaults, so
+# services can still burst. Delete this file (RUNAI_SIZING=prod) in production.
+assetsService:        {resources: {requests: &svc {cpu: 20m, memory: 128Mi}}}
+auditService:         {resources: {requests: *svc}}
+authorization:        {resources: {requests: *svc}}
+bffService:           {resources: {requests: *svc}}
+catalogService:       {resources: {requests: *svc}}
+cliExposer:           {resources: {requests: *svc}}
+clusterService:       {resources: {requests: *svc}}
+datavolumes:          {resources: {requests: *svc}}
+frontend:             {resources: {requests: *svc}}
+identityManager:      {resources: {requests: *svc}}
+identityProviderReconciler: {resources: {requests: *svc}}
+k8sObjectsTracker:    {resources: {requests: *svc}}
+notificationsProxy:   {resources: {requests: *svc}}
+notificationsService: {resources: {requests: *svc}}
+orgUnitHelper:        {resources: {requests: *svc}}
+orgUnitService:       {resources: {requests: *svc}}
+policyService:        {resources: {requests: *svc}}
+tempBackendSettings:  {resources: {requests: *svc}}
+tenantsManager:       {resources: {requests: *svc}}
+traefik:              {resources: {requests: *svc}}
+workloads:            {resources: {requests: *svc}}
+workloadsHelper:      {resources: {requests: *svc}}
+workloadsManager:     {resources: {requests: *svc}}
+metricsService:       {resources: {requests: {cpu: 20m, memory: 512Mi}}}
+
+keycloakx:
+  resources:
+    requests: {cpu: 200m, memory: 1Gi}
+postgresql:
+  primary:
+    resources:
+      requests: {cpu: 200m, memory: 512Mi}
+nats:
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+thanos:
+  query:
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+  receive:
+    resources:
+      requests: {cpu: 50m, memory: 256Mi}
+    persistence:
+      size: 20Gi

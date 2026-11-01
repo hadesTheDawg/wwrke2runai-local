@@ -1,0 +1,116 @@
+# Workload catalog: the container images Run:ai users can pick.
+#
+# 24-workload-catalog.sh copies every `source` (all architectures, digests
+# preserved) to <workload registry>/workloads/<image> and creates or updates
+# the Run:ai Environment `name` (scope: tenant) pointing at that copy.
+# Add an entry and re-run the script; pin tags, the nodes have no internet.
+#
+# Optional per entry: command/args (string), env (map), connections (Run:ai
+# tool definitions), routingMethod, workspace/training (bool, default true),
+# uidGidSource: fromIdpToken = run as the submitting user's UID/GID (token
+# claims set by 41-accounts.sh), so /home/<user> (data source "home") is
+# writable; fromTheImage = the image's user (default);
+# keepSpec: true = re-point an existing environment (Run:ai built-in) at the
+# local image, keeping its spec (only name/source/image are used).
+#
+# Ad-hoc copies without an environment: 25-mirror-image.sh <image>.
+#
+# Built images: `build: images/<dir>` (a Dockerfile, relative to runai/)
+# instead of `source`; 26-build-image.sh builds it on ww1 FROM images in the
+# workload registry, pushes it and runs 24-workload-catalog.sh.
+environments:
+  - name: ubuntu
+    description: Ubuntu 24.04 LTS
+    source: docker.io/library/ubuntu:24.04
+    image: ubuntu:24.04
+    uidGidSource: fromIdpToken
+    command: sleep
+    args: infinity
+
+  - name: ubi9
+    description: Red Hat Universal Base Image 9
+    source: registry.access.redhat.com/ubi9/ubi:9.8
+    image: ubi9:9.8
+    uidGidSource: fromIdpToken
+    command: sleep
+    args: infinity
+
+  - name: rocky9
+    description: Rocky Linux 9
+    source: docker.io/rockylinux/rockylinux:9.8
+    image: rocky:9.8
+    uidGidSource: fromIdpToken
+    command: sleep
+    args: infinity
+
+  - name: alma9
+    description: AlmaLinux 9
+    source: docker.io/library/almalinux:9.8
+    image: alma:9.8
+    uidGidSource: fromIdpToken
+    command: sleep
+    args: infinity
+
+  # Replaces Run:ai's built-in "rstudio" environment (unpinned upstream
+  # image, unusable offline). The session is opened through Run:ai, which
+  # authenticates users (SSO) in front of the tool, so RStudio's own login is off.
+  - name: rstudio
+    description: RStudio Server (rocker/rstudio 4.6.2)
+    source: docker.io/rocker/rstudio:4.6.2
+    image: rstudio:4.6.2
+    env:
+      DISABLE_AUTH: "true"
+    connections:
+      - name: RStudio
+        internalToolInfo:
+          toolType: rstudio
+          connectionType: ExternalUrl
+          containerPort: 8787
+          externalUrlInfo: {}
+    routingMethod: host-base
+    training: false
+
+  # Kali Linux rolling (base image: the kali-linux-* tool metapackages are not
+  # included and the nodes cannot apt-get; build a derived image with the tools
+  # you need and add it here). kali-rolling publishes no dated tags, so the
+  # local tag records the snapshot date; re-running never re-pulls it.
+  - name: kali
+    description: Kali Linux rolling (base, snapshot 2026-10-31)
+    source: docker.io/kalilinux/kali-rolling:latest
+    image: kali-rolling:2026-10-31
+    command: sleep
+    args: infinity
+
+  # Built on ww1 from images/ubuntu-dev/Dockerfile (26-build-image.sh).
+  - name: ubuntu-dev
+    description: Ubuntu 24.04 + compilers, git, Python venv
+    build: images/ubuntu-dev
+    image: ubuntu-dev:2026-11-01
+    uidGidSource: fromIdpToken
+    command: sleep
+    args: infinity
+
+  # --- Run:ai built-in environments, re-pointed at local copies -----------------
+  # keepSpec: only the image is swapped; Run:ai's tool connections, commands and
+  # variables stay as shipped. Built-ins not listed here (x86-only images,
+  # inference without Knative, or too large for this registry) are removed by
+  # 24-workload-catalog.sh because nothing on the offline nodes could run them.
+  - name: jupyter-scipy
+    source: quay.io/jupyter/scipy-notebook:2026-10-28   # docker.io/jupyter/* is no longer published
+    image: jupyter-scipy:2026-10-28
+    keepSpec: true
+
+  - name: vscode
+    source: ghcr.io/coder/code-server:4.99.4
+    image: code-server:4.99.4
+    keepSpec: true
+
+  - name: openwebui
+    source: ghcr.io/open-webui/open-webui:v0.6.42
+    image: open-webui:v0.6.42
+    keepSpec: true
+
+  - name: huggingface-chat-ui
+    source: ghcr.io/run-ai/chat-ui-db:0.20
+    image: chat-ui-db:0.20
+    keepSpec: true

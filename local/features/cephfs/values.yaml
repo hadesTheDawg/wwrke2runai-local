@@ -1,0 +1,20 @@
+# Ceph CSI for CephFS (chart ceph-csi-cephfs, https://ceph.github.io/csi-charts).
+# The cluster map (fsid, monitors) is added by 15-storage.sh from .env as a
+# second values file; the keys are in the Secret csi-cephfs-secret.
+# Check keys against `helm show values` of the chart version you bundle.
+
+# 15-storage.sh creates both from .env
+storageClass:
+  create: false
+secret:
+  create: false
+
+# RKE2 uses the standard kubelet directory (/var/lib/kubelet)
+kubeletDir: /var/lib/kubelet
+
+provisioner:
+  replicaCount: 2
+
+# The StorageClass selects the kernel client (mounter: kernel; ceph.ko is in
+# the EL9 kernel, the csi-storage overlay loads it on Warewulf nodes).
+# nodeplugin.forcecephkernelclient is only needed on kernels < 4.17.

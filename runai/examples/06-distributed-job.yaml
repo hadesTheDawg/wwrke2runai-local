@@ -1,0 +1,64 @@
+# Multi-pod job whose workers find each other by DNS: an Indexed Job plus a
+# headless Service. Pod i is reachable as <job>-<i>.<service>; the env vars
+# below are what torchrun / torch.distributed expect. Needs kubectl
+# (two objects in one file):  kubectl apply -f 06-distributed-job.yaml
+# Delete with:                kubectl delete -f 06-distributed-job.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: dist
+spec:
+  clusterIP: None                 # headless: DNS records per pod, no load balancing
+  selector:
+    job-name: dist
+  publishNotReadyAddresses: true  # resolvable before the pods are "ready"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dist
+  annotations:
+    kai.scheduler/batch-min-member: "2"   # gang: start both workers or neither
+spec:
+  completionMode: Indexed
+  completions: 2                  # number of workers (WORLD_SIZE)
+  parallelism: 2                  # all at once - they wait for each other
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        runai/node-pool: a100
+    spec:
+      subdomain: dist             # = Service name -> dist-0.dist, dist-1.dist
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: 10.10.172.1:5001/workloads/jupyter-scipy:2026-10-28
+          env:
+            - {name: MASTER_ADDR, value: dist-0.dist}
+            - {name: MASTER_PORT, value: "29500"}
+            - {name: WORLD_SIZE,  value: "2"}
+            - name: RANK
+              valueFrom: {fieldRef: {fieldPath: "metadata.annotations['batch.kubernetes.io/job-completion-index']"}}
+          # Real training: torchrun --nnodes=$WORLD_SIZE --node-rank=$RANK
+          #   --master-addr=$MASTER_ADDR --master-port=$MASTER_PORT train.py
+          command: ["python3", "-c"]
+          args:
+            - |
+              import os, socket, time
+              rank, port = int(os.environ["RANK"]), int(os.environ["MASTER_PORT"])
+              print(f"rank {rank} on {socket.gethostname()} ({socket.gethostbyname(socket.gethostname())})", flush=True)
+              if rank == 0:
+                  s = socket.create_server(("", port)); conn, peer = s.accept()
+                  print("rank 0 got:", conn.recv(100).decode(), "from", peer[0])
+              else:
+                  for _ in range(60):
+                      try: c = socket.create_connection((os.environ["MASTER_ADDR"], port)); break
+                      except OSError: time.sleep(2)
+                  c.sendall(f"hello from rank {rank}".encode()); print("rank", rank, "sent hello")
+          ports:
+            - {containerPort: 29500}
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits:   {cpu: "1", memory: 1Gi, nvidia.com/gpu: 1}

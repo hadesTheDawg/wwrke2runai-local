@@ -1,0 +1,23 @@
+# StorageClass for Run:ai project volumes on CephFS (rendered by 15-storage.sh:
+# placeholders filled from .env). Every PVC becomes a CephFS subvolume in the subvolume
+# group ${CEPHFS_SUBVOLUMEGROUP} with a quota of its requested size.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ${CEPHFS_STORAGECLASS}
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "${CEPHFS_DEFAULT_CLASS}"
+provisioner: cephfs.csi.ceph.com
+reclaimPolicy: ${CEPHFS_RECLAIM_POLICY}
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+parameters:
+  clusterID: ${CEPH_CLUSTER_ID}
+  fsName: ${CEPH_FS_NAME}
+  mounter: kernel
+  csi.storage.k8s.io/provisioner-secret-name: csi-cephfs-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: ceph-csi-cephfs
+  csi.storage.k8s.io/controller-expand-secret-name: csi-cephfs-secret
+  csi.storage.k8s.io/controller-expand-secret-namespace: ceph-csi-cephfs
+  csi.storage.k8s.io/node-stage-secret-name: csi-cephfs-secret
+  csi.storage.k8s.io/node-stage-secret-namespace: ceph-csi-cephfs

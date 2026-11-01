@@ -1,0 +1,85 @@
+#!/bin/sh
+# Format the node's local-disk file systems (wwctl --fsname/--fsformat) once.
+#
+# Replaces the stock "mkfs" overlay: in Warewulf 4.7.1 it tests `wipefs -n`,
+# which exits 0 on blank devices too, so a new disk is never formatted unless
+# --fswipe is set, and --fswipe reformats on every boot. Here a device is
+# formatted only if blkid finds no signature, so the containerd image cache
+# and kubelet data survive reboots. --fswipe still forces a fresh file system.
+#
+# Each file system carries /.warewulf-node with the owning node's id. A disk
+# marked for another node (cloned VM, disk moved between nodes) is
+# reformatted: its rke2/kubelet state would impersonate that node. Unmarked
+# file systems are adopted (marker written).
+#
+# Runs in wwinit (before udev), so /dev/disk/by-partlabel/* links do not
+# exist yet; partitions are looked up by the kernel's PARTNAME in sysfs.
+# Output is also logged to /var/log/warewulf-runai-wwinit.log (the initial
+# root is copied into the tmpfs root after wwinit, so the log survives).
+
+PATH=$PATH:/sbin:/usr/sbin:/bin:/usr/bin
+LOG=/var/log/warewulf-runai-wwinit.log
+info() { printf '%s\n' "$*"; printf '%s\n' "$*" >> "$LOG"; }
+die() { printf '%s\n' "$*" >&2; printf '%s\n' "$*" >> "$LOG"; exit 1; }
+
+resolve() {
+    case "$1" in
+        /dev/disk/by-partlabel/*)
+            for _ in $(seq 1 20); do
+                for u in /sys/class/block/*/uevent; do
+                    if grep -qx "PARTNAME=${1##*/}" "$u"; then
+                        echo "/dev/$(sed -n 's/^DEVNAME=//p' "$u")"; return 0
+                    fi
+                done
+                sleep 0.5
+            done
+            return 1 ;;
+        *) [ -b "$1" ] && echo "$1" ;;
+    esac
+}
+
+NODE="{{ .Id }}"
+MNT=/run/runai-mkfs
+# owner <dev> <type>: print the node id recorded on the file system
+owner() {
+    mkdir -p "$MNT"
+    mount -t "$2" -o ro "$1" "$MNT" 2>/dev/null || return 0
+    cat "$MNT/.warewulf-node" 2>/dev/null
+    umount "$MNT"
+}
+# mark <dev> <type>: record this node as the owner
+mark() {
+    mkdir -p "$MNT"
+    mount -t "$2" "$1" "$MNT" || die "warewulf: runai-mkfs: cannot mount $1 to mark it"
+    echo "$NODE" > "$MNT/.warewulf-node"
+    umount "$MNT"
+}
+{{- range $fs := .ThisNode.FileSystemList }}
+{{- if and $fs.Format (ne $fs.Format "swap") }}
+
+dev=$(resolve "{{ $fs.Id }}") || die "warewulf: runai-mkfs: {{ $fs.Id }} not found"
+format={{ if $fs.WipeFileSystem }}true{{ else }}false{{ end }}; was=""
+if [ -z "$(blkid -p -o value -s TYPE "$dev" 2>/dev/null)" ]; then
+    format=true
+else
+    was=$(owner "$dev" {{ $fs.Format }})
+    if [ -n "$was" ] && [ "$was" != "$NODE" ]; then
+        info "warewulf: runai-mkfs: $dev belongs to node '$was', not $NODE"
+        format=true
+    fi
+fi
+if $format; then
+    info "warewulf: runai-mkfs: formatting $dev ({{ $fs.Id }}) as {{ $fs.Format }}"
+    # mkfs.<type> directly: the `mkfs` wrapper's own search path does not
+    # resolve helpers this early in wwinit
+    mkfs.{{ $fs.Format }} {{ if regexMatch "^ext[234]$" $fs.Format }}-F {{ else if regexMatch "^(xfs|btrfs)$" $fs.Format }}-f {{ end }}{{ with $fs.Label }}-L {{ . }} {{ end }}"$dev" >> "$LOG" 2>&1 \
+        || die "warewulf: runai-mkfs: failed to format $dev"
+    mark "$dev" {{ $fs.Format }}
+elif [ -z "$was" ]; then
+    info "warewulf: runai-mkfs: $dev ({{ $fs.Id }}) adopted for $NODE"
+    mark "$dev" {{ $fs.Format }}
+else
+    info "warewulf: runai-mkfs: $dev ({{ $fs.Id }}) already formatted for $NODE, keeping it"
+fi
+{{- end }}
+{{- end }}

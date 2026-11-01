@@ -1,0 +1,15 @@
+# Run:ai cluster (chart runai-cluster, release runai-cluster, namespace runai).
+# 23-cluster.sh adds controlPlane.url, cluster.uid/url and the bootstrap
+# token obtained from the control plane API.
+global:
+  customCA:
+    enabled: true                             # secret runai-ca-cert (labelled cluster-wide)
+
+clusterConfig:
+  global:
+    ingress:
+      ingressClass: traefik
+    # Host-based tool URLs (https://<workload>.<domain>), required by tools
+    # such as RStudio. Needs *.<domain> in DNS -> ww1 (14-expose.sh) and the
+    # wildcard certificate/Ingress created by 23-cluster.sh.
+    subdomainSupport: true

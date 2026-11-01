@@ -1,0 +1,30 @@
+# StorageClass for Run:ai project volumes on WekaFS (rendered by 15-storage.sh:
+# placeholders filled from .env). Directory-backed volumes (dir/v1): every PVC is a
+# directory in ${WEKA_FILESYSTEM} with a hard quota of its requested size,
+# so thousands of project volumes cost nothing on the Weka side.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ${WEKA_STORAGECLASS}
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "${WEKA_DEFAULT_CLASS}"
+provisioner: csi.weka.io
+reclaimPolicy: ${WEKA_RECLAIM_POLICY}
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+parameters:
+  volumeType: dir/v1
+  filesystemName: ${WEKA_FILESYSTEM}
+  capacityEnforcement: HARD
+  # directory permissions of new volumes; group-writable for project members
+  permissions: "${WEKA_VOLUME_PERMISSIONS}"
+  csi.storage.k8s.io/provisioner-secret-name: csi-wekafs-api-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: csi-wekafs
+  csi.storage.k8s.io/controller-publish-secret-name: csi-wekafs-api-secret
+  csi.storage.k8s.io/controller-publish-secret-namespace: csi-wekafs
+  csi.storage.k8s.io/controller-expand-secret-name: csi-wekafs-api-secret
+  csi.storage.k8s.io/controller-expand-secret-namespace: csi-wekafs
+  csi.storage.k8s.io/node-stage-secret-name: csi-wekafs-api-secret
+  csi.storage.k8s.io/node-stage-secret-namespace: csi-wekafs
+  csi.storage.k8s.io/node-publish-secret-name: csi-wekafs-api-secret
+  csi.storage.k8s.io/node-publish-secret-namespace: csi-wekafs

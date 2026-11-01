@@ -1,0 +1,26 @@
+# Part of a GPU: Run:ai GPU fractions. No nvidia.com/gpu limit here - the
+# gpu-fraction annotation on the POD template is the request.
+#   gpu-fraction: "0.5"          half of one GPU (compute share + memory)
+#   gpu-memory:   "20000"        or: a fixed amount of GPU memory in MiB
+# Use one of the two, never both, and only on one container per pod.
+#   runai workload submit -f 03-fractional-gpu.yaml -p <project>
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: half-gpu
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      annotations:
+        gpu-fraction: "0.5"
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: main
+          image: 10.10.172.1:5001/workloads/ubuntu:24.04
+          command: ["bash", "-c", "nvidia-smi; sleep 60"]
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits:   {cpu: "1", memory: 1Gi}
