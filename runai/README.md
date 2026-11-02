@@ -42,6 +42,7 @@ htdcn0N  (profile default,rke2,runai)
 | `runai/25-mirror-image.sh <image> [name:tag]` | Pull any image into the workload registry by hand (all architectures, digests kept); prints the image reference and a ready catalog entry. |
 | `runai/26-build-image.sh [name...]` | Build catalog entries that have `build: images/<dir>` (a Dockerfile `FROM ${WL}/<catalog image>`) with podman on ww1, push them to `workloads/` and run `24-workload-catalog.sh` so they show up as Run:ai environments. Existing tags are kept (`FORCE=1` rebuilds). |
 | `runai/htd-images.py [Dockerfile...]` | **Root-only TUI** on ww1 for the workload registry: browse/filter repositories and tags (platforms, size, labels, env, history), see which tags are Run:ai environments (`●`) or catalog-only (`○`), build a Dockerfile (writes its catalog entry, then `26-build-image.sh`), import an image (`25-mirror-image.sh`, or a catalog entry + `24-workload-catalog.sh`), sync, edit the catalog. Dockerfiles given as arguments open the build dialog. Scriptable: `ls`, `inspect`, `build`, `import`, `sync`. Guide: [`../htd-images-howto.md`](../htd-images-howto.md). |
+| `runai/htd-runai.py` | **Researcher TUI** on the login node (installed as `/usr/local/bin/htd-runai` by `48-user-access.sh`; runs as the user, with their own Run:ai login): setup checklist with fixes (CLI URL, `runai login`, default project, `~/.kube/config`, `runai kubeconfig set`, namespace, examples), identity and per-node-pool GPU quota vs. allocation, workload list/details, a form that writes a manifest and submits it, batch-submit YAML files, progress bars from Submitted to Running/Done, shell/logs/describe/port-forward/delete, save a workload as re-submittable YAML. Scriptable: `status`, `ls`, `doctor`, `submit`, `watch`, `save`, `shell`. Guide: [`../htd-runai-howto.md`](../htd-runai-howto.md). |
 | `runai/30-smoke-test.sh` | Project `smoke` + a 1-GPU and a 0.5-GPU training through the API; both must reach Running. `KEEP=1` leaves them. |
 | `runai/31-verify-local.sh` | Every image used by any pod resolves in the local registry. ww1 has internet and containerd silently falls back upstream, so run this after installs; re-run `11-mirror.sh` if it reports gaps (its last pass also mirrors images of running pods, e.g. the Prometheus that Run:ai's operator starts). |
 | `runai/32-catalog-test.sh` | As a user, via the API: every OS environment runs, a workload lists the workload registry through the data source, an RStudio workspace URL answers with the Run:ai SSO redirect. `KEEP=1` leaves them. |
@@ -51,7 +52,7 @@ htdcn0N  (profile default,rke2,runai)
 | `runai/45-quota-report.sh` | `sshare`-style report: per department/group and partition — guaranteed GPUs / limit / weight, allocated / requested — plus GPUs per user. `WATCH=10` refreshes every 10 s. |
 | `runai/46-quota-demo.sh` | Six users submit GPU jobs as themselves to show enforcement: within quota, GPU fraction, over-quota on idle GPUs, limit-blocked (stays pending), and reclaim of an over-quota job. `KEEP=1` leaves the jobs running. |
 | `runai/47-home-automount.sh` | Workload pods that **run as the submitting user** (`runAsUser` ≥ 5000, i.e. environments with `uidGidSource: fromIdpToken`) get the NFS `/home` mounted automatically (MutatingAdmissionPolicy on project namespaces; no data source needed). Image-user environments (Jupyter, code-server, RStudio, Kali) keep the image's own `/home` — mounting over it broke Jupyter (`mkdir /home/jovyan: permission denied`). Opt out per workload with annotation `home.htd.local/skip: "true"`. |
-| `runai/48-user-access.sh` | Command-line access on the login node: `runai` CLI (served offline by the control plane) and `kubectl` in `/usr/local/bin`, first-login hook (CLI URL + skeleton `~/.kube/config`), kube-apiserver OIDC against Keycloak so `runai kubeconfig set` gives users `kubectl` in their project namespaces (Run:ai's own RoleBindings), example manifests in `/usr/local/share/runai/examples`. Restarts rke2-server once. User guide: [`../cli-howto.md`](../cli-howto.md). |
+| `runai/48-user-access.sh` | Command-line access on the login node: `runai` CLI (served offline by the control plane) and `kubectl` in `/usr/local/bin`, first-login hook (CLI URL + skeleton `~/.kube/config`), kube-apiserver OIDC against Keycloak so `runai kubeconfig set` gives users `kubectl` in their project namespaces (Run:ai's own RoleBindings), example manifests in `/usr/local/share/runai/examples`, and `htd-runai` in `/usr/local/bin`. Restarts rke2-server once. User guide: [`../cli-howto.md`](../cli-howto.md). |
 
 Copy to ww1 (no macOS xattrs):
 
@@ -135,6 +136,12 @@ Example: `images/mlflow` – *HTD Researcher · MLflow*: MLflow tracking server
 as a Run:ai tool (host-based URL), running as the submitting user with runs
 in `~/mlflow`; branded shell (banner, prompt, `htd-info`, `htd-demo`,
 `htd-help`) for login and Run:ai UI terminals.
+
+Example: `images/kali-cockpit` – Kali rolling + the Cockpit web console as a
+Run:ai tool (*Cockpit*, port 9090, host-based URL). Runs as root; login
+`kali` with `COCKPIT_PASSWORD`, or a generated password printed in the
+workload logs; `COCKPIT_AUTH=none` leaves only Run:ai SSO in front. No
+systemd, so the Services/Logs pages are empty; Terminal works.
 
 **Querying the registry from a workload** – select data source
 `workload-registry`; it mounts `url`, `username`, `password`, `ca.crt` at

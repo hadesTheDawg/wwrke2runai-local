@@ -12,6 +12,7 @@
 #     first login; `runai kubeconfig set` adds their token.
 #     Restarts rke2-server (API down ~1 min; running pods are not affected).
 #   - the guide's example manifests in /usr/local/share/runai/examples
+#   - htd-runai (researcher TUI over the CLI, htd-runai-howto.md) in /usr/local/bin
 # Self-test: a site user logs in with the CLI and checks namespace access.
 set -euo pipefail
 . "$(dirname "$0")/env.sh"
@@ -64,6 +65,10 @@ EOF
 # --- kubectl ----------------------------------------------------------------
 install -m 755 /var/lib/rancher/rke2/bin/kubectl /usr/local/bin/kubectl
 echo "kubectl: $(/usr/local/bin/kubectl version --client | head -1)"
+
+# --- htd-runai: researcher TUI (login, quota, submit, follow, shell, save YAML) ---
+install -m 755 "$RUNAI_SRC/htd-runai.py" /usr/local/bin/htd-runai
+echo "htd-runai: /usr/local/bin/htd-runai"
 
 # --- kube-apiserver OIDC (Keycloak realm "runai") ----------------------------
 # Token claims (lib/accounts.py): email (verified), groups = access-rule groups.

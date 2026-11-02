@@ -1,3 +1,4 @@
 .env
 _runai-repo*/
 runai-bundle-*.tar*
+bundle

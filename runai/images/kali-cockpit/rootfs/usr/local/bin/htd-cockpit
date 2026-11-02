@@ -1,0 +1,64 @@
+#!/bin/bash
+# Container command: Cockpit web console on :${COCKPIT_PORT}, plain HTTP for
+# Run:ai's TLS-terminating ingress. Creates the login user (COCKPIT_USER,
+# COCKPIT_PASSWORD) unless COCKPIT_AUTH=none. Extra arguments go to cockpit-ws.
+set -euo pipefail
+port=${COCKPIT_PORT:-9090}
+user=${COCKPIT_USER:-kali}
+auth=${COCKPIT_AUTH:-password}
+
+# Browser origin of the Run:ai tool: https://<project>-<workload>.<domain>.
+# cockpit-ws --for-tls-proxy already accepts https://<Host header>; listing it
+# keeps the websocket working if the ingress rewrites Host. localhost entries
+# are for `kubectl port-forward`.
+ns_file=/var/run/secrets/kubernetes.io/serviceaccount/namespace
+ns=$( [ -r "$ns_file" ] && cat "$ns_file" || true)
+project=${RUNAI_PROJECT:-${ns#runai-}}
+url=""
+if [ -n "$project" ] && [ -n "${RUNAI_JOB_NAME:-}" ]; then
+  url="https://${project}-${RUNAI_JOB_NAME}.${HTD_RUNAI_DOMAIN:-runai.htd.local}"
+fi
+mkdir -p /etc/cockpit /run/cockpit
+cat > /etc/cockpit/cockpit.conf <<EOF
+[WebService]
+Origins = ${url} http://localhost:${port} http://127.0.0.1:${port} ${COCKPIT_ORIGINS:-}
+AllowUnencrypted = true
+LoginTitle = HTD · Kali ${project:+($project)}
+
+# Without systemd nothing listens on /run/cockpit/session (the socket-activated
+# cockpit-session); have cockpit-ws spawn it per login instead.
+[Basic]
+Command = $(ls /usr/lib/cockpit/cockpit-session /usr/libexec/cockpit-session 2>/dev/null | head -1)
+EOF
+
+ws_args=(--port "$port" --for-tls-proxy)
+case "$auth" in
+  none)
+    ws_args+=(--local-session=cockpit-bridge)
+    login="none (COCKPIT_AUTH=none): root session, protected by Run:ai SSO only" ;;
+  password)
+    id "$user" >/dev/null 2>&1 || useradd -m -s /bin/bash "$user"
+    usermod -aG sudo "$user" 2>/dev/null || true
+    printf '%s ALL=(ALL) NOPASSWD:ALL\n' "$user" > /etc/sudoers.d/90-htd-cockpit
+    chmod 0440 /etc/sudoers.d/90-htd-cockpit
+    # Cockpit refuses root by default; allow it only when asked for by name.
+    [ "$user" != root ] || : > /etc/cockpit/disallowed-users
+    pw=${COCKPIT_PASSWORD:-$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-16)}
+    printf '%s:%s\n' "$user" "$pw" | chpasswd
+    umask 077; printf '%s\n' "$pw" > /root/cockpit-password; umask 022
+    if [ -n "${COCKPIT_PASSWORD:-}" ]; then
+      login="$user / (COCKPIT_PASSWORD)"
+    else
+      login="$user / $pw   (generated; also in /root/cockpit-password)"
+    fi
+    unset pw ;;
+  *) echo "COCKPIT_AUTH must be password or none, not '$auth'" >&2; exit 1 ;;
+esac
+
+cat <<EOF
+ ▲ HTD · Kali + Cockpit $(. /etc/htd-release; echo "$COCKPIT_VERSION")
+   project  ${project:-local}   workload ${RUNAI_JOB_NAME:-?}
+   browser  ${url:-open the Cockpit tool of this workload in Run:ai}
+   login    $login
+EOF
+exec cockpit-ws "${ws_args[@]}" "$@"

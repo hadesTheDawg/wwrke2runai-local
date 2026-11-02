@@ -86,7 +86,9 @@ ssh <user>@192.168.65.2
 ```
 
 The first login points the `runai` CLI at this site and creates a
-`~/.kube/config` for you. Then:
+`~/.kube/config` for you. Then either run **`htd-runai`**, a terminal UI that
+walks you through the steps below (Setup tab), shows your quota and follows
+your workloads ([`htd-runai-howto.md`](htd-runai-howto.md)), or do them by hand:
 
 ```bash
 # 1. Log in to Run:ai (prompts for your password)

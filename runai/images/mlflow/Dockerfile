@@ -43,10 +43,13 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # Full mlflow (server + UI) brings scikit-learn, pandas and matplotlib for htd-demo.
+# SQLAlchemy 2.1 dropped pool.FallbackAsyncAdaptedQueuePool, which mlflow 3.5
+# imports for its backend store ("Error initializing backend store" at start).
 # The UI tab title is rebranded; best effort, the UI may retitle pages itself.
 RUN python3 -m venv "$VIRTUAL_ENV" \
  && pip install --upgrade pip \
- && pip install "mlflow==${MLFLOW_VERSION}" \
+ && pip install "mlflow==${MLFLOW_VERSION}" "sqlalchemy>=1.4,<2.1" \
+ && python -c 'import mlflow.store.db.utils' \
  && ui="$(python -c 'import mlflow, os; print(os.path.dirname(mlflow.__file__))')/server/js/build/index.html" \
  && { [ ! -f "$ui" ] || sed -i 's|<title>[^<]*</title>|<title>HTD Researcher · MLflow</title>|' "$ui"; }
 
